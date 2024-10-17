@@ -3,7 +3,7 @@ from rest_framework.permissions import (
     IsAuthenticatedOrReadOnly,
     AllowAny,
 )
-from rest_framework import status, generics
+from rest_framework import status, generics, filters
 from django.contrib.auth import authenticate
 from .models import Review, Movie, User
 from .serializers import ReviewSerializer, MovieSerializer, SignUpSerializer
@@ -11,6 +11,8 @@ from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework.views import APIView
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.exceptions import PermissionDenied
 
 
 # signup view for registeration with post funcation to vladatie data and save it into database
@@ -36,7 +38,7 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        return obj.author == request.user
+        return obj.user == request.user
 
 
 # list all views and allow only authenticated users to create new reviews
@@ -44,15 +46,23 @@ class ReviewListCreateView(generics.ListCreateAPIView):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
     permission_classes = [IsAuthenticated]  # only authenticated users
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ["rating", "create_date"]
+    search_fields = ["movie__title"]
 
-    def perform_create(self, serializer):
-        return serializer.save(user=self.request.user)  # set the review to logged in user
-
-  
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
 
     def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
-        return Response(response.data, status=status.HTTP_201_CREATED)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
 
 class ReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -61,20 +71,23 @@ class ReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def perform_update(self, serializer):
-        # users to edit only their own review
-        return serializer.save(user=self.request.user)
-    
-    
-    
-    def delete(self, serializer):
-        return serializer.delete(
-            user=self.request.user
-        )  # users to delete only their own review
+        if serializer.instance.user == self.request.user:
+            serializer.save()
+        else:
+            raise PermissionDenied("You do not have permission to edit this review.")
+
+    def perform_destroy(self, instance):
+        if instance.user == self.request.user:
+            instance.delete()
+        else:
+            raise PermissionDenied("You do not have permission to delete this review.")
 
 
 class MovieListCreateView(generics.ListCreateAPIView):
     queryset = Movie.objects.all()
     serializer_class = MovieSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["title"]
 
 
 class MovieRetrieveView(generics.RetrieveAPIView):

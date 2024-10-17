@@ -43,6 +43,8 @@ class SignUpSerializer(serializers.ModelSerializer):
 class ReviewSerializer(serializers.ModelSerializer):
 
     user = serializers.CharField(source="user.username", read_only=True)
+    movie_title = serializers.CharField(source="movie.title", read_only=True)
+    movie_name = serializers.CharField(write_only=True)
 
     class Meta:
         model = Review
@@ -50,6 +52,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "id",
             "rating",
             "movie_title",
+            "movie_name",
             "review_content",
             "create_date",
             "user",
@@ -67,6 +70,12 @@ class ReviewSerializer(serializers.ModelSerializer):
                 f"'{value}' is not listed in the movie database!"
             )
         return value
+
+    def create(self, validated_data):
+        movie_name = validated_data.pop("movie_name")
+        movie = Movie.objects.get(title__iexact=movie_name)
+        user = self.context["request"].user
+        return Review.objects.create(movie=movie, user=user, **validated_data)
 
 
 class MovieSerializer(serializers.ModelSerializer):

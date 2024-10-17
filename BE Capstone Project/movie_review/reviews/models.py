@@ -9,6 +9,13 @@ class User(AbstractUser):
         return self.username
 
 
+# Movie model to store movie details.
+class Movie(models.Model):
+    title = models.CharField(max_length=150, null=False, blank=False)
+    release_date = models.DateTimeField()
+    genre = models.CharField(max_length=50)
+
+
 class Review(models.Model):
     # rating class to limit the choices from 1 to 5
     class Rating(models.IntegerChoices):
@@ -19,19 +26,8 @@ class Review(models.Model):
         FIVE = 5, " 5 stars"
 
     rating = models.IntegerField(choices=Rating.choices, blank=False)
-    movie_title = models.CharField(max_length=150, null=False, blank=False)
+    # movie_title = models.CharField(max_length=150, null=False, blank=False)
     review_content = models.TextField(null=False, blank=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reviews")
     create_date = models.DateTimeField(auto_now_add=True)
-    movie = models.ForeignKey(
-        "movie", related_name="reviews", default=1, on_delete=models.CASCADE
-    )
-
-
-# Movie model to store movie details.
-
-
-class Movie(models.Model):
-    title = models.CharField(max_length=150, null=False, blank=False)
-    release_date = models.DateTimeField()
-    genre = models.CharField(max_length=50)
+    movie = models.ForeignKey(Movie, related_name="reviews", on_delete=models.CASCADE)
